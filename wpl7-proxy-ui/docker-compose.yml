@@ -1,0 +1,43 @@
+# Pagina web pentru rute proxy. Proiect Compose separat de WPL7: update-urile WPL7 nu o ating.
+name: wpl7-proxy-ui
+
+services:
+  proxyui:
+    build: .
+    image: wpl7-proxy-ui:local
+    container_name: wpl7-proxy-ui
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    cap_add: [DAC_OVERRIDE]        # scrie in /srv/traefik/dynamic, indiferent de proprietar
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PROXYUI_USER: ${PROXYUI_USER:-admin}
+      PROXYUI_PASSWORD: ${PROXYUI_PASSWORD:?Seteaza PROXYUI_PASSWORD in .env (minim 12 caractere)}
+      PROXYUI_DOMAIN: ${PROXYUI_DOMAIN:?Seteaza PROXYUI_DOMAIN in .env}
+      PANEL_DOMAIN: ${PANEL_DOMAIN:-}
+      PUBLIC_IP: ${PUBLIC_IP:-}
+      ACME_RESOLVER: ${ACME_RESOLVER:-letsencrypt}
+      TRAEFIK_HOST: wpl7-traefik
+    volumes:
+      # Singurul volum. NU monta /var/run/docker.sock si nici /srv/traefik/acme.json (chei private).
+      - ${SRV_ROOT:-/srv}/traefik/dynamic:/data
+    networks: [proxy]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=wpl7_proxy"
+      - "traefik.http.routers.proxyui.rule=Host(`${PROXYUI_DOMAIN}`)"
+      - "traefik.http.routers.proxyui.entrypoints=websecure"
+      - "traefik.http.routers.proxyui.tls.certresolver=${ACME_RESOLVER:-letsencrypt}"
+      - "traefik.http.services.proxyui.loadbalancer.server.port=8080"
+      # Optional: acces doar de la anumite IP-uri (nu folosi in spatele Cloudflare proxy).
+      # - "traefik.http.routers.proxyui.middlewares=proxyui-ip"
+      # - "traefik.http.middlewares.proxyui-ip.ipallowlist.sourcerange=203.0.113.7/32,192.168.1.0/24"
+
+networks:
+  proxy:
+    name: wpl7_proxy
+    external: true                 # creata de WPL7
