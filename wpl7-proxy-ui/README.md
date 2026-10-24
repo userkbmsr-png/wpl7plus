@@ -8,23 +8,31 @@ fișiere (`/srv/traefik/dynamic/proxy-<domeniu>.yml`), deci le poți folosi împ
 Nu modifică WPL7: rulează ca un container separat, într-un proiect Compose separat, și nu e atinsă
 de update-urile WPL7.
 
-## Instalare (pe serverul WPL7, ca root)
+> **Instalare automată:** din repo-ul `wpl7plus`, `install.sh` instalează WPL7 și această pagină și
+> completează `.env`. Instrucțiunile de mai jos sunt pentru instalarea **manuală**, separat de WPL7.
+
+## Instalare (pe serverul WPL7, ca utilizator obișnuit)
+
+Nu ai nevoie de root și nici de `/opt`: folderul poate sta oriunde, de exemplu în `/home/utilizator`.
 
 1. În DNS: A record pentru domeniul paginii (ex. `proxy.exemplu.ro`) spre IP-ul serverului.
-2. Copiază arhiva pe server (WinSCP/pscp), apoi:
+2. În WinSCP, urcă `wpl7-proxy-ui.tar.gz` în folderul în care intri implicit (`/home/utilizator`).
+3. În PuTTY, cu același utilizator:
 
 ```bash
-cd /opt
-tar xzf ~/wpl7-proxy-ui.tar.gz
+tar xzf wpl7-proxy-ui.tar.gz
 cd wpl7-proxy-ui
 cp .env.example .env
 nano .env              # PROXYUI_DOMAIN, PROXYUI_PASSWORD (min. 12 caractere), PANEL_DOMAIN, PUBLIC_IP
 chmod 600 .env
-docker compose up -d --build
-docker compose logs --tail 20     # trebuie să vezi „wpl7-proxy-ui pornit pe :8080”
+sudo docker compose up -d --build
+sudo docker compose logs --tail 20     # trebuie să vezi „wpl7-proxy-ui pornit pe :8080”
 ```
 
-3. Deschide `https://proxy.exemplu.ro` (certificatul se emite în câteva secunde) și intră cu
+Dacă utilizatorul e în grupul `docker`, `sudo` nu mai e necesar. Toate comenzile `docker compose`
+de mai jos se rulează din acest folder (`cd ~/wpl7-proxy-ui`).
+
+4. Deschide `https://proxy.exemplu.ro` (certificatul se emite în câteva secunde) și intră cu
    utilizatorul și parola din `.env`.
 
 ## Folosire
@@ -59,7 +67,27 @@ Pagina poate publica orice domeniu spre orice adresă internă, deci trateaz-o c
   (`/srv/traefik/dynamic`). Nu primește `docker.sock`, nici cheile ACME.
 - Opțional, restricționează accesul pe IP: dezactivează comentariile `ipallowlist` din
   `docker-compose.yml`.
-- Salvează rutele: `cp -a /srv/traefik/dynamic /root/dynamic.bak`.
+- Salvează rutele: `sudo cp -a /srv/traefik/dynamic ~/dynamic.bak`.
+
+## Ținte din altă rețea (ex. serverul în 192.168.1.x, ținta în 192.168.0.x)
+
+Traefik ajunge la orice adresă la care ajunge serverul WPL7 însuși, deci contează doar dacă serverul
+are drum până la țintă. Testează întâi de pe server: `ping -c2 192.168.0.X` și
+`curl -I http://192.168.0.X:PORT`, apoi „Testează ținta” din pagină (testul din pagină e cel care contează).
+
+Metode, de la cea mai simplă:
+
+1. **PC2 e în spatele unui al doilea router** (cu WAN în 192.168.1.x): faci port forwarding pe acel
+   router spre PC2 și folosești ca țintă `192.168.1.<IP-WAN-router>:PORT`. Nu e nevoie de rutare.
+2. **Cele două rețele sunt pe același switch**: dai serverului o a doua adresă din 192.168.0.0/24
+   (test: `sudo ip addr add 192.168.0.200/24 dev <interfață>`; permanent în netplan, cu `sudo netplan try`).
+3. **Rută statică** prin al doilea router: `sudo ip route add 192.168.0.0/24 via 192.168.1.<IP-router>`
+   (permanent în netplan, la `routes:`). Routerul trebuie să permită trafic din WAN spre LAN, ceea ce
+   routerele casnice blochează implicit; de obicei metoda 1 e mai simplă.
+4. **Locații diferite**: VPN (WireGuard, Tailscale) și țintă = adresa din VPN.
+
+Atenție: WPL7 creează câte o rețea Docker /24 pentru fiecare site. Dacă `ip route | grep 192.168.0`
+arată `192.168.0.0/24 dev br-...`, o rețea Docker a ocupat acea adresă și ținta nu mai e accesibilă.
 
 ## Depanare
 
@@ -69,15 +97,15 @@ Pagina poate publica orice domeniu spre orice adresă internă, deci trateaz-o c
 | „… timeout” | Rutare, firewall sau VPN lipsă între serverul WPL7 și ținta ta. Un VPS din cloud nu ajunge la `192.168.x.x` fără tunel. |
 | „… certificatul TLS nu e acceptat” | Țintă `https://` autosemnată: bifează „Ignoră verificarea TLS”. |
 | Certificat: „nu servește un certificat valid” | Încă neemis (așteaptă un minut) sau DNS-ul nu indică spre server / portul 80 nu e deschis din internet. Un AAAA vechi în DNS poate bloca emiterea. |
-| Pagina nu mai răspunde după un update WPL7 | `cd /opt/wpl7-proxy-ui && docker compose up -d --force-recreate` (reatașează containerul la rețeaua `wpl7_proxy`). |
+| Pagina nu mai răspunde după un update WPL7 | `cd ~/wpl7-proxy-ui && sudo docker compose up -d --force-recreate` (reatașează containerul la rețeaua `wpl7_proxy`). |
 
-Loguri: `docker compose logs -f` (conțin adăugările/ștergerile și IP-ul de unde s-au făcut).
+Loguri: `sudo docker compose logs -f` (conțin adăugările/ștergerile și IP-ul de unde s-au făcut).
 
 ## Actualizare și dezinstalare
 
-- Dacă modifici fișierele: `docker compose up -d --build`.
-- Dezinstalare: `docker compose down`. Rutele rămân active (sunt fișiere în `/srv/traefik/dynamic`);
-  le ștergi cu `rm /srv/traefik/dynamic/proxy-<domeniu>.yml`.
+- Dacă modifici fișierele: `sudo docker compose up -d --build`.
+- Dezinstalare: `sudo docker compose down`. Rutele rămân active (sunt fișiere în `/srv/traefik/dynamic`);
+  le ștergi cu `sudo rm /srv/traefik/dynamic/proxy-<domeniu>.yml`.
 
 ## Fișiere
 
