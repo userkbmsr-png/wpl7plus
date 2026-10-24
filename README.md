@@ -70,6 +70,13 @@ curl -fsSL …/install.sh | sudo bash -s -- --sitename=exemplu.ro --sitepassword
 ```
 
 `--sitename=`, `--sitepassword=`, `-y/--yes` (la rulare repetată continuă fără întrebare), `-h/--help`.
+
+Dacă terminalul nu răspunde la întrebări (de exemplu pe un sistem cu alt `sudo`), rulează varianta care
+păstrează tastatura legată de script:
+
+```bash
+sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/userkbmsr-png/wpl7plus/main/install.sh)"
+```
 Echivalent prin mediu: `sudo SITENAME=… SITEPASSWORD=… bash`. O parolă dată în linia de comandă rămâne
 în istoric și în `ps`; pentru uz normal lasă scriptul să o ceară.
 
@@ -97,6 +104,13 @@ sudo rm -rf /opt/wpl7plus        # șterge și identity
 ```
 Rutele rămân active (fișierele din `/srv/traefik/dynamic`); le ștergi cu
 `sudo rm /srv/traefik/dynamic/proxy-<domeniu>.yml`. WPL7 se dezinstalează după documentația lui.
+
+## Notă tehnică
+
+`curl … | sudo bash` trimite scriptul prin stdin, deci întrebările se citesc de pe `/dev/tty`. Pe Ubuntu 26.04 `sudo` este
+`sudo-rs`, care în acest caz pornește comanda în fundalul unui pseudo-terminal propriu: o citire de pe terminal făcută
+într-un subshell (`$(...)`) se blochează. `install.sh` citește de aceea doar în shell-ul principal și e testat cu `sudo-rs`
+0.2.13, cu `sudo` 1.9 și fără `sudo`. Dacă modifici scriptul, nu muta citirile din `ask()` într-un `$(...)`.
 
 ## Structura acestui repo
 
