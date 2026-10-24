@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex,nofollow">
+<title>WPL7 · Rute proxy</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<main>
+  <h1>Rute proxy</h1>
+  <p class="lead">Un domeniu public care deschide o adresă internă, de exemplu
+    <code>exemplu.ro</code> → <code>192.168.1.50:8080</code>. Certificatul HTTPS se emite automat.</p>
+
+  <form id="add" autocomplete="off">
+    <label>Domeniu
+      <input name="domain" required placeholder="exemplu.ro" inputmode="url" autocapitalize="none" spellcheck="false">
+    </label>
+    <label>Țintă internă
+      <input name="target" required placeholder="192.168.1.50:8080" inputmode="url" autocapitalize="none" spellcheck="false">
+    </label>
+    <label class="check">
+      <input type="checkbox" name="insecure">
+      <span>Ignoră verificarea certificatului TLS al țintei (pentru <code>https://</code> cu certificat autosemnat)</span>
+    </label>
+    <div class="row">
+      <button type="submit" class="primary" id="save">Adaugă ruta</button>
+      <button type="button" id="test">Testează ținta</button>
+    </div>
+  </form>
+
+  <div id="msg" class="msg" role="status" aria-live="polite" hidden></div>
+
+  <div class="bar">
+    <h2>Rute existente</h2>
+    <button type="button" id="refresh">Verifică toate</button>
+  </div>
+  <ul id="routes" class="routes"></ul>
+  <p id="empty" class="muted" hidden>Nu există rute încă.</p>
+  <p id="ignored" class="muted" hidden></p>
+</main>
+</body>
+</html>
