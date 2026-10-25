@@ -311,23 +311,57 @@ wait_first_boot() {
   fi
 }
 
+UI_REQUIRED=(app.py Dockerfile docker-compose.yml static/index.html static/app.js static/app.css)
+
+ui_missing() {  # ui_missing DIR -> fișierele lipsă, câte unul pe linie
+  local d="$1" f
+  for f in "${UI_REQUIRED[@]}"; do
+    if [ ! -f "$d/$f" ]; then printf '%s\n' "$f"; fi
+  done
+}
+ui_complete() { [ -z "$(ui_missing "$1")" ]; }
+
+# Aduce wpl7-proxy-ui în $APP_DIR: din folderul de lângă script (checkout local) sau din arhiva repo-ului.
+# Acceptă folderul wpl7-proxy-ui/ din rădăcina repo-ului sau, la nevoie, fișierele puse direct în rădăcină.
 fetch_proxy_ui() {
-  local src="" d=""
+  local src="" d="" tmp="" cand diag miss
   if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
     d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    if [ -f "$d/wpl7-proxy-ui/app.py" ]; then src="$d/wpl7-proxy-ui"; fi
+    if ui_complete "$d/wpl7-proxy-ui"; then src="$d/wpl7-proxy-ui"; fi
   fi
   if [ -n "$src" ]; then
     say "  Copiez wpl7-proxy-ui din $src"
-    cp -a "$src/." "$APP_DIR/"
   else
-    say "  Descarc wpl7-proxy-ui din github.com/$REPO ($REF)"
-    if ! curl -fsSL "https://github.com/$REPO/archive/refs/heads/$REF.tar.gz" </dev/null \
-          | tar xz -C "$APP_DIR" --strip-components=2 --wildcards '*/wpl7-proxy-ui/*'; then
-      die "Nu pot descărca wpl7-proxy-ui din github.com/$REPO (ramura '$REF'). Repo-ul e public și conține folderul wpl7-proxy-ui/?"
+    say "  Descarc repo-ul github.com/$REPO ($REF)"
+    tmp="$(mktemp -d /tmp/wpl7plus-repo.XXXXXX)"
+    if ! curl -fsSL "https://github.com/$REPO/archive/refs/heads/$REF.tar.gz" -o "$tmp/repo.tar.gz" </dev/null; then
+      rm -rf "$tmp"
+      die "Nu pot descărca github.com/$REPO (ramura '$REF'). Repo-ul e public și ramura există?"
     fi
+    mkdir "$tmp/repo"
+    if ! tar xzf "$tmp/repo.tar.gz" -C "$tmp/repo" --strip-components=1; then
+      rm -rf "$tmp"; die "Arhiva repo-ului nu poate fi citită."
+    fi
+    for cand in "$tmp/repo/wpl7-proxy-ui" "$tmp/repo"; do
+      if ui_complete "$cand"; then src="$cand"; break; fi
+    done
+    if [ -z "$src" ]; then
+      diag="$tmp/repo"
+      if [ -d "$tmp/repo/wpl7-proxy-ui" ]; then diag="$tmp/repo/wpl7-proxy-ui"; fi
+      miss="$(ui_missing "$diag")"
+      warn "wpl7-proxy-ui e incomplet în github.com/$REPO (ramura $REF). Lipsesc:"
+      printf '%s\n' "$miss" | sed 's/^/      /' >&2
+      warn "Conținutul repo-ului (primele niveluri):"
+      (cd "$tmp/repo" && find . -maxdepth 2 -not -path './.git*' | sort | head -40) | sed 's/^/      /' >&2
+      rm -rf "$tmp"
+      die "Urcă folderul wpl7-proxy-ui/ complet (cu static/ în el) în rădăcina repo-ului și rulează din nou."
+    fi
+    d="${src#"$tmp"/repo}"
+    say "  Folosesc ${d:-rădăcina repo-ului}"
   fi
-  [ -f "$APP_DIR/app.py" ] || die "wpl7-proxy-ui incomplet în $APP_DIR (lipsește app.py)."
+  rm -rf "${APP_DIR:?}/static"
+  cp -a "$src/." "$APP_DIR/"
+  if [ -n "$tmp" ]; then rm -rf "$tmp"; fi
 }
 
 write_env() {
@@ -366,10 +400,14 @@ install_proxy_ui() {
     || die "Nu găsesc $SRV_ROOT/traefik/dynamic: WPL7 pare instalat în altă locație (rulează cu SRV_ROOT=...)."
 
   mkdir -p "$APP_DIR"
-  if [ -f "$APP_DIR/app.py" ]; then
+  if ui_complete "$APP_DIR"; then
     ok "Fișierele wpl7-proxy-ui există deja în $APP_DIR"
   else
+    if [ -f "$APP_DIR/app.py" ]; then
+      warn "wpl7-proxy-ui din $APP_DIR e incomplet (lipsește: $(ui_missing "$APP_DIR" | tr '\n' ' ')). Îl descarc din nou."
+    fi
     fetch_proxy_ui
+    ui_complete "$APP_DIR" || die "wpl7-proxy-ui rămâne incomplet în $APP_DIR."
     ok "Fișierele wpl7-proxy-ui sunt în $APP_DIR"
   fi
   write_env
