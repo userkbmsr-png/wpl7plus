@@ -52,6 +52,7 @@
   }
 
   function certLine(c) {
+    if (c.disabled) return line("Certificat: neverificat (" + c.error + ")", "");
     return c.ok
       ? line("Certificat: " + c.issuer + ", expiră în " + c.days + " zile", c.days < 14 ? "warn" : "ok")
       : line("Certificat: " + c.error + " - verifică DNS-ul și că portul 80 e deschis", "warn");
