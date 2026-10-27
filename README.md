@@ -57,7 +57,9 @@ Dacă există `/opt/wpl7plus/identity`, scriptul anunță instalarea existentă 
 - WPL7 **nu** se descarcă și nu se reinstalează;
 - ți se cer din nou `sitename` (Enter păstrează valoarea veche) și `sitepassword`, iar valorile noi
   le înlocuiesc pe cele vechi în `identity` și în `.env`;
-- containerul wpl7-proxy-ui se recreează cu noile valori.
+- containerul wpl7-proxy-ui se recreează cu noile valori;
+- dacă folderul `/opt/wpl7plus/wpl7-proxy-ui` e incomplet (de exemplu a rămas așa după o rulare eșuată), se descarcă
+  din nou din repo; dacă e complet, nu se atinge (modificările locale rămân).
 
 Dacă schimbi `sitename`, WPL7 rămâne configurat cu domeniile vechi (nu îl reinstalează nimeni);
 se schimbă doar adresa paginii proxy, iar `PANEL_DOMAIN` din `.env` păstrează domeniul real al panoului.
@@ -96,14 +98,38 @@ Echivalent prin mediu: `sudo SITENAME=… SITEPASSWORD=… bash`. O parolă dat�
 - Parola din `identity` și `.env` e în text clar; fișierele sunt 600 și folderul 700.
 - Detalii despre pagina proxy (securitate, depanare, rute către alte rețele): `wpl7-proxy-ui/README.md`.
 
-## Dezinstalare pagina proxy
+## Dezinstalare
 
 ```bash
-cd /opt/wpl7plus/wpl7-proxy-ui && sudo docker compose down
-sudo rm -rf /opt/wpl7plus        # șterge și identity
+curl -fsSL https://raw.githubusercontent.com/userkbmsr-png/wpl7plus/main/uninstall.sh | sudo bash
 ```
-Rutele rămân active (fișierele din `/srv/traefik/dynamic`); le ștergi cu
-`sudo rm /srv/traefik/dynamic/proxy-<domeniu>.yml`. WPL7 se dezinstalează după documentația lui.
+
+Scriptul arată mai întâi ce a găsit (containere, dimensiunea datelor, firewall), te întreabă ce să dezinstaleze,
+afișează planul și cere confirmare. Recomandat: rulează întâi cu `--dry-run`, care nu schimbă nimic.
+
+| Variantă | Ce face | Confirmare |
+|---|---|---|
+| `--only-proxy-ui` | șterge doar pagina wpl7-proxy-ui (container, imagine, fișiere); WPL7, datele și rutele rămân | `d` |
+| `--keep-data` | șterge tot (WPL7 + pagina), dar **păstrează datele** din `/srv`; `/opt/wpl7` se mută în `/opt/wpl7.removed-<data>` | sitename-ul |
+| `--purge-data` | șterge tot, **inclusiv datele** (site-uri, baze de date, backup-uri, certificate) — **ireversibil** | `STERGE TOT` |
+
+Ce face varianta completă, în ordine: șterge pagina proxy; oprește stack-ul WPL7 (întâi panoul, ca să nu recreeze
+containerele site-urilor), apoi șterge containerele `wpl7-*` și `wp-*`, rețelele `wpl7_*` și imaginile folosite de WPL7
+(cele folosite și de alte containere rămân); dezactivează firewall-ul WPL7 (unitate, script, tabela `nft` `inet wpl7`);
+scoate cheia panoului din `/root/.ssh/authorized_keys`; șterge `/opt/wpl7plus` (identity, pagina) și jurnalul instalării.
+
+Opțiuni: `--dry-run`, `-y/--yes` (obligatoriu fără terminal), `--remove-routes` (cu `--only-proxy-ui`: șterge și
+`proxy-*.yml`), `--keep-images`, `--remove-swap`, `--close-ports` (UFW 80/443), `--remove-docker`, `--srv-root=`,
+`--wpl7-dir=`. Exemplu fără întrebări: `… | sudo bash -s -- --keep-data --yes`.
+
+**Nu se ating niciodată:** pachetele de bază (curl, git, ufw, jq, openssl, nftables), regulile UFW pentru SSH și
+politicile implicite UFW, alte containere/rețele/volume Docker, `BACKUP_ROOT` (dacă backup-urile sunt pe alt disc) și
+alte directoare din `/srv` în afară de cele ale WPL7. Swap-ul, porturile 80/443 și Docker se elimină doar la cerere.
+La `--keep-data`, arhiva `/opt/wpl7.removed-<data>` păstrează `deploy/.env` (parola MariaDB): baza de date din
+`/srv/mysql` nu poate fi folosită cu alt `.env`.
+
+WPL7 nu are dezinstalare oficială; scriptul se bazează pe ce face `provision/setup.sh` (versiunea 0.3.2). Dacă o
+versiune nouă adaugă alte elemente, vor rămâne pe server; verifică lista „Rămân, intenționat” de la final.
 
 ## Notă tehnică
 
@@ -115,9 +141,23 @@ Rutele rămân active (fișierele din `/srv/traefik/dynamic`); le ștergi cu
 ## Structura acestui repo
 
 ```
-install.sh            instalatorul unificat
-wpl7-proxy-ui/        pagina proxy (app.py, static/, Dockerfile, docker-compose.yml, …)
-wpl7-proxy.sh         varianta în linie de comandă pentru rute (opțională)
+install.sh                      instalatorul unificat
+uninstall.sh                    dezinstalarea (WPL7 + wpl7-proxy-ui)
+wpl7-proxy-ui/
+  app.py  Dockerfile  docker-compose.yml  .env.example  README.md
+  static/  index.html  app.js  app.css
+wpl7-proxy.sh                   varianta în linie de comandă pentru rute (opțională)
 ```
-`install.sh` descarcă `wpl7-proxy-ui/` din arhiva acestui repo (ramura `main`), deci repo-ul trebuie să fie
-public și să conțină folderul `wpl7-proxy-ui/` la rădăcină.
+
+`install.sh` descarcă arhiva acestui repo de pe GitHub (ramura `main`), deci repo-ul trebuie să fie public și să
+conțină folderul `wpl7-proxy-ui/` **complet**, cu `static/` în el. Scriptul verifică fișierele de mai sus; dacă
+lipsește ceva, afișează ce lipsește și ce conține repo-ul. Acceptă și fișierele puse direct în rădăcina repo-ului.
+
+Ca să vezi exact ce servește GitHub (de pe orice server, fără autentificare):
+
+```bash
+curl -fsSL https://github.com/userkbmsr-png/wpl7plus/archive/refs/heads/main.tar.gz | tar tz | head -40
+```
+
+La urcarea pe GitHub din browser, trage **folderul** `wpl7-proxy-ui` (nu doar fișierele din el) în pagina „Upload files”,
+altfel subfolderul `static/` nu ajunge în repo. Mai sigur: `git add . && git commit && git push`.
