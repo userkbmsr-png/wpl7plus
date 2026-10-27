@@ -282,6 +282,8 @@ def probe_dns(domain):
 def probe_cert(domain, timeout=5):
     """Ce certificat serveste Traefik pentru acest domeniu (SNI). Verificat normal:
     certificatul implicit al Traefik nu trece verificarea => inca neemis."""
+    if not TRAEFIK_HOST:  # TRAEFIK_HOST gol = Traefik nu e accesibil din container: verificarea e oprita
+        return {"ok": False, "disabled": True, "error": "verificarea certificatului nu e configurată"}
     try:
         ctx = ssl.create_default_context()
         with socket.create_connection((TRAEFIK_HOST, TRAEFIK_PORT), timeout=timeout) as s:
