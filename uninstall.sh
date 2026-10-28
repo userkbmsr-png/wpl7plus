@@ -218,7 +218,7 @@ show_inventory() {
     say "  WPL7:            ${WPL7_DIR#"$PREFIX"}${WPL7_VERSION:+ (versiunea $WPL7_VERSION)}"
     say "                   $(count_lines "$STACK_CONTAINERS") containere de stack, $(count_lines "$SITE_CONTAINERS") containere de site/FTP, $(count_lines "$NETWORKS") rețele wpl7_*, $(count_lines "$VOLUMES") volume wpl7_*"
     for d in sites mysql backups panel traefik mail plugins; do
-      if [ -d "$SRV_ROOT/$d" ]; then s="$(size_of "$SRV_ROOT/$d")"; say "  Date $SRV_ROOT/$d: ${s:-?}" | sed "s#$PREFIX##"; fi
+      if [ -d "$SRV_ROOT/$d" ]; then s="$(size_of "$SRV_ROOT/$d")"; say "  Date ${SRV_ROOT#"$PREFIX"}/$d: ${s:-?}"; fi
     done
     if [ -n "$BACKUP_ROOT" ]; then say "  Backup-uri externe (BACKUP_ROOT): $BACKUP_ROOT  -> NU se șterg niciodată"; fi
     if [ "$FW_PRESENT" = 1 ]; then say "  Firewall WPL7:   unitatea wpl7-firewall + tabela nftables inet wpl7"; fi
